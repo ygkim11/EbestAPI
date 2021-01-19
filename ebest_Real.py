@@ -19,6 +19,7 @@ class MyObjects:
     stock_code_list = []  # < 종목코드 모아놓는 리스트
     stock_futures_code_list = []  # 주식선물 코드
     stock_futures_basecode_list = []  # 주식선물 기초자산 종목코드
+    stock_futures_basecode_dict = {}
 
 
 
@@ -61,8 +62,7 @@ class XR_event_handler:
             tt["매도호가"] = int(self.GetFieldData("OutBlock", "offerho"))
             tt["매수호가"] = int(self.GetFieldData("OutBlock", "bidho"))
 
-            print(MyObjects.K3_dict[shcode])
-
+            print(shcode, MyObjects.K3_dict[shcode])
 
         elif code == "HA_":
 
@@ -76,7 +76,7 @@ class XR_event_handler:
             tt["매수호가잔량4"] = int(self.GetFieldData("OutBlock", "bidrem4"))
             tt["매도호가잔량4"] = int(self.GetFieldData("OutBlock", "offerrem4"))
 
-            print(MyObjects.HA_dict[shcode])
+            print(shcode, MyObjects.HA_dict[shcode])
 
         elif code == "JC0":
 
@@ -97,7 +97,7 @@ class XR_event_handler:
             tt["매도호가"] = int(self.GetFieldData("OutBlock", "offerho1"))
             tt["매수호가"] = int(self.GetFieldData("OutBlock", "bidho1"))
 
-            print(MyObjects.JC0_dict[futcode])
+            print(futcode, MyObjects.JC0_dict[futcode])
 
         elif code == "JH0":
 
@@ -111,7 +111,7 @@ class XR_event_handler:
             tt["매수호가잔량4"] = int(self.GetFieldData("OutBlock", "bidrem4"))
             tt["매도호가잔량4"] = int(self.GetFieldData("OutBlock", "offerrem4"))
 
-            print(MyObjects.JH0_dict[futcode])
+            print(futcode, MyObjects.JH0_dict[futcode])
 
 # TR 요청 이후 수신결과 데이터를 다루는 구간
 class XQ_event_handler:
@@ -131,18 +131,48 @@ class XQ_event_handler:
 
         elif code == "t8401":  # 주식선물 종목코드
             occurs_count = self.GetBlockCount("t8401OutBlock")
-            print("주식선물 종목 갯수: %s" % occurs_count, flush=True)
+            # print("주식선물 종목 갯수: %s" % occurs_count, flush=True)
 
             for i in range(occurs_count):
                 shcode = self.GetFieldData("t8401OutBlock", "shcode", i)
                 basecode = self.GetFieldData("t8401OutBlock", "basecode", i)
                 MyObjects.stock_futures_code_list.append(shcode)
-                MyObjects.stock_futures_basecode_list.append(basecode)
+                # MyObjects.stock_futures_basecode_list.append(basecode)
 
-            ### !!!추후 최근월물/ 차근월물만 뽑아내는 종목리스트로 바꾸기??? ###
+                #make dictionary
+                MyObjects.stock_futures_basecode_dict[shcode] = basecode[1:] # basecode 앞의 "A" 제거
 
-            print("주식선물 종목 리스트: %s" % MyObjects.stock_futures_code_list, flush=True)
-            print("주식선물 basecode: %s" % MyObjects.stock_futures_basecode_list, flush=True)
+            ### 최근월물/ 차근월물만 뽑아내는 종목리스트로 바꾸기 (추후 보완 ㄱ) ###
+            fu_code_ls = list(set(map(lambda x: x[1:3], MyObjects.stock_futures_code_list)))
+
+            total_fu_code = []
+            for fu_code in fu_code_ls:
+                fut_tmp = []
+                for i in range(len(MyObjects.stock_futures_code_list)):
+                    fu_code_i = MyObjects.stock_futures_code_list[i][1:3]
+                    if fu_code_i == fu_code:
+                        if MyObjects.stock_futures_code_list[i][0] == "1": # 선물이면 종목코드의 첫자리가 1 이여야 함.
+                            fut_tmp.append(MyObjects.stock_futures_code_list[i])
+                    else:
+                        pass
+                total_fu_code.append(fut_tmp)
+
+            total_fu_code = list(map(lambda x: x[:1], total_fu_code))  # 더 원월물까지 포함하고 싶으면 3을 바꾸면됨
+
+            flatten_fu_code = []
+            for fu_code in total_fu_code:
+                flatten_fu_code = flatten_fu_code + fu_code
+
+            MyObjects.stock_futures_code_list = flatten_fu_code # 주식선물만으로 filter된 stock_futures_code_list 생성
+
+            basecode_by_dict = []
+            for fu_code in MyObjects.stock_futures_code_list:
+                basecode_by_dict.append(MyObjects.stock_futures_basecode_dict[fu_code])
+
+            MyObjects.stock_futures_basecode_list = list(set(basecode_by_dict)) # 주식선물에 대한 base code list
+
+            print(len(MyObjects.stock_futures_code_list), "주식선물 종목 리스트: %s" % MyObjects.stock_futures_code_list, flush=True)
+            print(len(MyObjects.stock_futures_basecode_list),"주식선물 basecode: %s" % MyObjects.stock_futures_basecode_list, flush=True)
 
             MyObjects.tr_ok = True
 
@@ -175,7 +205,7 @@ class Main:
         # TR: 주식 종목코드 가져오기
         MyObjects.tr_event = win32com.client.DispatchWithEvents("XA_DataSet.XAQuery", XQ_event_handler)
         MyObjects.tr_event.ResFileName = "C:/eBEST/xingAPI/Res/t8436.res"
-        MyObjects.tr_event.SetFieldData("t8436InBlock", "gubun", 0, "2")
+        MyObjects.tr_event.SetFieldData("t8436InBlock", "gubun", 0, "0")
         MyObjects.tr_event.Request(False)
 
         MyObjects.tr_ok = False
@@ -194,8 +224,8 @@ class Main:
             pythoncom.PumpWaitingMessages()
 
         #############For Test################
-        MyObjects.stock_code_list = ["005930", "017670"]
-        MyObjects.stock_futures_code_list = ["111R2000", "112R2000"]
+        # MyObjects.stock_code_list = ["005930", "017670"]
+        # MyObjects.stock_futures_code_list = ["111R2000", "112R2000"]
         #####################################
 
         MyObjects.real_event = win32com.client.DispatchWithEvents("XA_DataSet.XAReal", XR_event_handler)
